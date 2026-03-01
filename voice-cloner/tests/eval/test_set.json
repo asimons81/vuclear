@@ -1,0 +1,34 @@
+{
+  "voices": [
+    {"id": "male_1", "file": "tests/eval/samples/male_1.wav", "description": "Adult male, neutral accent"},
+    {"id": "female_1", "file": "tests/eval/samples/female_1.wav", "description": "Adult female, neutral accent"},
+    {"id": "nb_1", "file": "tests/eval/samples/nb_1.wav", "description": "Non-binary speaker"}
+  ],
+  "scripts": [
+    {
+      "id": "short_sentence",
+      "text": "Hello, this is a test of voice cloning technology.",
+      "description": "Short sentence"
+    },
+    {
+      "id": "paragraph",
+      "text": "Voice cloning is the process of creating a digital replica of a person's voice. By analyzing a short audio sample, artificial intelligence can synthesize new speech that sounds remarkably similar to the original speaker.",
+      "description": "Paragraph of factual text"
+    },
+    {
+      "id": "technical",
+      "text": "The model uses a diffusion-based architecture with cross-attention over mel-spectrogram features at 80 frequency bins and a 22050 Hz sample rate. FFT size is 1024 with a hop length of 256 samples.",
+      "description": "Technical terminology"
+    },
+    {
+      "id": "emotional",
+      "text": "I can't believe it! After all this time, we finally made it. This moment feels surreal — like a dream I never thought would come true. Thank you, from the bottom of my heart.",
+      "description": "Emotional content with varied prosody"
+    },
+    {
+      "id": "long",
+      "text": "Welcome to today's presentation on the future of artificial intelligence. Over the next hour, we'll explore how large language models are transforming industries from healthcare to education, from creative arts to scientific research. We'll look at both the remarkable capabilities these systems have demonstrated and the important challenges we must address — including safety, fairness, and transparency. By the end, you'll have a clearer picture of where this technology is heading and what it means for all of us.",
+      "description": "Long narration (~1 min output)"
+    }
+  ]
+}

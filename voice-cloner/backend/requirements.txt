@@ -1,0 +1,44 @@
+# ─── Web Framework ────────────────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# ─── Rate Limiting ────────────────────────────────────────────────────────────
+slowapi==0.1.9
+
+# ─── Audio Processing ─────────────────────────────────────────────────────────
+librosa==0.10.2.post1
+soundfile==0.12.1
+pydub==0.25.1
+pyloudnorm==0.1.1
+numpy==1.26.4
+ffmpeg-python==0.2.0
+
+# ─── File Validation ──────────────────────────────────────────────────────────
+python-magic==0.4.27
+
+# ─── Voice Engines ─────────────────────────────────────────────────────────────
+# Chatterbox (MIT - default)
+# Install separately: pip install chatterbox-tts
+# Or from source: pip install git+https://github.com/resemble-ai/chatterbox.git
+
+# MetaVoice (Apache 2.0 - optional fallback)
+# Install separately: pip install metavoice
+
+# F5-TTS (CC-BY-NC - non-commercial only, experimental)
+# Install separately: pip install f5-tts
+
+# ─── Optional Denoising ──────────────────────────────────────────────────────
+# Enable with DENOISE=true in .env
+# Install separately: pip install deepfilternet
+
+# ─── Dev / Testing ────────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1
+
+# ─── WER evaluation (optional) ───────────────────────────────────────────────
+# openai-whisper  (install separately, large download)
+# jiwer==3.0.4
