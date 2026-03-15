@@ -6,7 +6,7 @@ Vuclear is a creator-first voice tool that helps people turn their own voice int
 
 The actual application root is this nested directory:
 
-`vuclear`
+`voice-cloner`
 
 Key folders:
 
