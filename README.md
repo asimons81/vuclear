@@ -2,11 +2,7 @@
 
 Vuclear is a creator-first voice tool that helps people turn their own voice into usable, flexible audio for content, iteration, and production — with speed, control, and consent at the center.
 
-## Real project structure
-
-The actual application root is this nested directory:
-
-`voice-cloner`
+## Project structure
 
 Key folders:
 

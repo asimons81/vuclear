@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Objective audio quality checks for voice-cloner outputs.
+Objective audio quality checks for Vuclear outputs.
 
 Usage:
     python tests/eval/run_checks.py --output path/to/output.wav [--script "original text"]

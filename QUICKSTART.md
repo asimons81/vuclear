@@ -7,14 +7,12 @@
 ### Mac / Linux / WSL
 
 ```bash
-cd voice-cloner
 ./start.sh
 ```
 
 ### Windows
 
 ```cmd
-cd voice-cloner
 start.bat
 ```
 
