@@ -31,9 +31,62 @@ check_command() {
 echo ""
 echo "Checking dependencies..."
 
+# ─── Python Interpreter Selection ────────────────────────────────────────────────
+echo ""
+echo "Finding compatible Python..."
+
+# First check if default python3 is already compatible
+# This is preferred because it typically has venv support available
+PYTHON_CMD=""
+if command -v python3 &> /dev/null; then
+    PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))' 2>/dev/null) || true
+    if [ -n "$PYTHON_VERSION" ]; then
+        PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+        PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+        if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 11 ] && [ "$PYTHON_MINOR" -le 13 ]; then
+            PYTHON_CMD="python3"
+        fi
+    fi
+fi
+
+# If python3 isn't compatible, try specific versions
+if [ -z "$PYTHON_CMD" ]; then
+    for ver in 3.11 3.12 3.13; do
+        if command -v python$ver &> /dev/null; then
+            PYTHON_CMD="python$ver"
+            break
+        fi
+    done
+fi
+
+# Final check - must have SOME Python
+if [ -z "$PYTHON_CMD" ]; then
+    echo -e "${RED}✗${NC} No Python interpreter found"
+    echo "Install Python 3.11-3.13 from https://python.org"
+    exit 1
+fi
+
+# Check Python version
+PYTHON_VERSION=$($PYTHON_CMD -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+# Enforce compatible range: 3.11 <= version <= 3.13
+if [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 11 ] && [ "$PYTHON_MINOR" -le 13 ]; then
+    echo -e "${GREEN}✓${NC} Python $PYTHON_VERSION (compatible)"
+else
+    echo -e "${RED}✗${NC} Python $PYTHON_VERSION found"
+    echo "  Vuclear requires Python 3.11, 3.12, or 3.13"
+    echo "  Python 3.14+ has compatibility issues with voice engines"
+    echo ""
+    echo "Install a compatible version:"
+    echo "  https://www.python.org/downloads/"
+    exit 1
+fi
+
 # Check required commands
 MISSING=0
-check_command python3 || MISSING=1
+check_command $PYTHON_CMD || MISSING=1
 check_command node || MISSING=1
 check_command npm || MISSING=1
 check_command ffmpeg || MISSING=1
@@ -56,16 +109,6 @@ if [ $MISSING -eq 1 ]; then
     exit 1
 fi
 
-# Check Python version
-PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
-REQUIRED_PYTHON="3.11"
-if [ "$(printf '%s\n' "$REQUIRED_PYTHON" "$PYTHON_VERSION" | sort -V | head -n1)" != "$REQUIRED_PYTHON" ]; then
-    echo -e "${RED}✗${NC} Python $PYTHON_VERSION found, but 3.11+ required"
-    exit 1
-else
-    echo -e "${GREEN}✓${NC} Python $PYTHON_VERSION"
-fi
-
 # Check Node version
 NODE_VERSION=$(node -v | tr -d 'v')
 REQUIRED_NODE="20"
@@ -84,19 +127,27 @@ echo "Checking voice engines..."
 if [ -d ".venv" ]; then
     source .venv/bin/activate
     VENV_PIP="pip"
+    
+    if $VENV_PIP show chatterbox-tts &> /dev/null; then
+        echo -e "${GREEN}✓${NC} Chatterbox TTS (MIT - Commercial OK)"
+    elif $VENV_PIP show metavoice &> /dev/null; then
+        echo -e "${GREEN}✓${NC} MetaVoice (Apache 2.0 - Commercial OK)"
+    elif $VENV_PIP show f5-tts &> /dev/null; then
+        echo -e "${YELLOW}!${NC} F5-TTS (CC-BY-NC - Non-commercial only)"
+    else
+        echo -e "${YELLOW}!${NC} No voice engine installed"
+        echo "  Install with: pip install chatterbox-tts"
+    fi
 else
-    VENV_PIP="pip3"
-fi
-
-if $VENV_PIP show chatterbox-tts &> /dev/null; then
-    echo -e "${GREEN}✓${NC} Chatterbox TTS (MIT - Commercial OK)"
-elif $VENV_PIP show metavoice &> /dev/null; then
-    echo -e "${GREEN}✓${NC} MetaVoice (Apache 2.0 - Commercial OK)"
-elif $VENV_PIP show f5-tts &> /dev/null; then
-    echo -e "${YELLOW}!${NC} F5-TTS (CC-BY-NC - Non-commercial only)"
-else
-    echo -e "${YELLOW}!${NC} No voice engine installed"
-    echo "  Install with: pip install chatterbox-tts"
+    # In check-only mode without venv, skip voice engine check
+    if [ "$1" = "--check-only" ]; then
+        echo ""
+        echo -e "${YELLOW}!${NC} No voice engine check (no venv yet)"
+        echo "  Voice engine will be installed when you run without --check-only"
+    else
+        echo -e "${YELLOW}!${NC} No voice engine installed"
+        echo "  Install with: pip install chatterbox-tts"
+    fi
 fi
 
 # ─── Check-only mode ─────────────────────────────────────────────────────────
@@ -111,8 +162,8 @@ echo ""
 echo "Setting up Python environment..."
 
 if [ ! -d ".venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv .venv
+    echo "Creating virtual environment with $PYTHON_CMD..."
+    $PYTHON_CMD -m venv .venv
 fi
 
 # Activate venv
@@ -126,6 +177,9 @@ fi
 # Check for at least one voice engine
 if ! pip show chatterbox-tts &> /dev/null && ! pip show metavoice &> /dev/null && ! pip show f5-tts &> /dev/null; then
     echo ""
+    echo -e "${YELLOW}Ensuring packaging tools are up-to-date...${NC}"
+    pip install --upgrade pip setuptools wheel --quiet
+    
     echo -e "${YELLOW}Installing Chatterbox TTS (default engine)...${NC}"
     pip install chatterbox-tts
 fi

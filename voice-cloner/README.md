@@ -1,19 +1,8 @@
 # Vuclear
 
-Vuclear is a creator-first voice tool that helps people turn their own voice into usable, flexible audio for content, iteration, and production — with speed, control, and consent at the center.
+Vuclear is a creator-first, local-first voice tool for turning your own voice into usable, flexible audio for content and production.
 
-## Real project structure
-
-The actual application root is this nested directory:
-
-`voice-cloner`
-
-Key folders:
-
-- `backend/`: FastAPI service, synthesis pipeline, CLI, storage/services layer
-- `frontend/`: existing Next.js UI
-- `docs/`: audit, CLI usage, service contract, pipeline readiness notes
-- `tests/`: lightweight automated tests and evaluation helpers
+**Create more. Record less.**
 
 ## Quick setup
 

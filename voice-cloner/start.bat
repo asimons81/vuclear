@@ -6,7 +6,73 @@ echo.
 echo 🚀 Starting Vuclear...
 echo.
 
+REM ─── Python Interpreter Selection ─────────────────────────────────────────────
+echo Finding compatible Python...
+
+REM Try to find Python 3.11-3.13 (known compatible range)
+REM Python 3.14+ has setuptools/pip compatibility issues
+set PYTHON_CMD=
+
+REM Check for specific versions
+where python3.13 >nul 2>&1 && set PYTHON_CMD=python3.13
+if defined PYTHON_CMD goto :python_found
+where python3.12 >nul 2>&1 && set PYTHON_CMD=python3.12
+if defined PYTHON_CMD goto :python_found
+where python3.11 >nul 2>&1 && set PYTHON_CMD=python3.11
+if defined PYTHON_CMD goto :python_found
+
+REM Fall back to python
+where python >nul 2>&1 && set PYTHON_CMD=python
+
+:python_found
+if not defined PYTHON_CMD (
+    echo ✗ No Python interpreter found
+    echo   Install Python 3.11-3.13 from https://python.org
+    pause
+    exit /b 1
+)
+
+REM Check Python version
+for /f "delims=" %%v in ('%PYTHON_CMD% -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"') do set PYTHON_VERSION=%%v
+echo Using Python %PYTHON_VERSION%...
+
+REM Enforce compatible range: 3.11 <= version <= 3.13
+echo %PYTHON_VERSION% | findstr /R "^3\.[0-9][0-9]*$" >nul
+if errorlevel 1 (
+    echo ✗ Cannot determine Python version
+    pause
+    exit /b 1
+)
+
+for /f "tokens=1,2 delims=." %%a in ("%PYTHON_VERSION%") do (
+    set PYTHON_MAJOR=%%a
+    set PYTHON_MINOR=%%b
+)
+
+set COMPATIBLE=0
+if "%PYTHON_MAJOR%"=="3" (
+    if %PYTHON_MINOR% GEQ 11 (
+        if %PYTHON_MINOR% LEQ 13 (
+            set COMPATIBLE=1
+        )
+    )
+)
+
+if %COMPATIBLE%==0 (
+    echo ✗ Python %PYTHON_VERSION% found
+    echo   Vuclear requires Python 3.11, 3.12, or 3.13
+    echo   Python 3.14+ has compatibility issues
+    echo.
+    echo Install a compatible version:
+    echo   https://www.python.org/downloads/
+    pause
+    exit /b 1
+)
+
+echo ✓ Python %PYTHON_VERSION% (compatible)
+
 REM ─── Dependency Check ─────────────────────────────────────────────────────────
+echo.
 echo Checking dependencies...
 
 REM Check Python
@@ -72,7 +138,7 @@ echo Setting up Python environment...
 
 if not exist ".venv" (
     echo Creating virtual environment...
-    python -m venv .venv
+    %PYTHON_CMD% -m venv .venv
 )
 
 REM Activate venv
@@ -91,6 +157,8 @@ if %errorlevel% neq 0 (
         pip show f5-tts >nul 2>&1
         if %errorlevel% neq 0 (
             echo.
+            echo Ensuring packaging tools are up-to-date...
+            pip install --upgrade pip setuptools wheel >nul 2>&1
             echo Installing Chatterbox TTS...
             pip install chatterbox-tts
         )

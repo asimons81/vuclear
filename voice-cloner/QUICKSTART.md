@@ -57,6 +57,37 @@ After startup, open your browser:
 
 ---
 
+## Supported Platforms
+
+| Platform | Status | Verified By | Launch Method | Notes |
+|----------|--------|-------------|---------------|-------|
+| **Windows 10/11** | Intended | ✅ Local (start.bat) | `start.bat` | Primary dev environment |
+| **macOS** | Intended | Untested | `start.sh` | Should work; PRs welcome |
+| **Linux (native)** | Intended | Untested | `start.sh` | Requires manual deps |
+| **WSL/WSL2** | Intended | ✅ Local (start.sh) | `start.sh` in WSL | Recommended on Windows |
+
+**Status meanings:**
+- **Intended:** We aim for this to work
+- **Verified:** Tested by the maintainer on this environment
+- **Untested:** Should work based on standard tooling, but not personally confirmed
+
+### Prerequisites
+
+All platforms require:
+
+- **Python 3.11–3.13** — https://python.org (3.14 NOT supported)
+- **Node.js 20+** — https://nodejs.org
+- **FFmpeg** (ffmpeg + ffprobe) in PATH — https://ffmpeg.org
+- **Voice engine** — Install one: `pip install chatterbox-tts` (recommended, MIT, commercial OK)
+
+> **Important:** Python 3.14 is NOT compatible with current voice engines. Use Python 3.11, 3.12, or 3.13.
+
+### Windows-specific
+
+If using WSL, run inside WSL. If using native Windows, use `start.bat` from Command Prompt or PowerShell.
+
+---
+
 ## Troubleshooting
 
 ### "Command not found" errors
@@ -94,17 +125,17 @@ If ports 3000 or 8000 are busy, stop other services or change the port in `.env`
 
 ## System Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|--------------|
-| Python | 3.11 | 3.11-3.13 |
-| Node.js | 20 | 22+ |
-| RAM | 8GB | 16GB+ |
-| GPU | Optional | NVIDIA 8GB+ VRAM |
+| Component | Minimum | Recommended | Required |
+|-----------|---------|-------------|----------|
+| Python | 3.11 | 3.11-3.13 | ✅ Yes |
+| Node.js | 20 | 22+ | ✅ Yes |
+| RAM | 8GB | 16GB+ | ✅ Yes (for inference) |
+| GPU | Optional | NVIDIA 8GB+ VRAM | ❌ No |
 
-**Voice engines** (install one):
-- **Chatterbox** (default, MIT license, commercial OK)
-- MetaVoice (Apache 2.0, commercial OK)
-- F5-TTS (non-commercial only)
+**Voice engines** (install one required):
+- **Chatterbox** (default, MIT license, commercial OK) — `pip install chatterbox-tts`
+- MetaVoice (Apache 2.0, commercial OK) — `pip install metavoice-tts`
+- F5-TTS (non-commercial only) — `pip install f5-tts`
 
 ---
 
