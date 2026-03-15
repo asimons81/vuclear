@@ -12,6 +12,6 @@ export const useAppStore = create<AppStore>()(
       tosAccepted: false,
       acceptTos: () => set({ tosAccepted: true }),
     }),
-    { name: "voice-cloner-app" },
+    { name: "vuclear-app" },
   ),
 );

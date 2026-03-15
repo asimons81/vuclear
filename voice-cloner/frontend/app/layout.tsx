@@ -7,8 +7,8 @@ import Link from "next/link";
 const geist = Geist({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Voice Cloner",
-  description: "Local-first voice cloning — upload a sample, get a voice.",
+  title: "Vuclear",
+  description: "Creator-first voice tool — upload a sample, get your voice.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-6"
               aria-label="Main navigation"
             >
-              <span className="font-bold text-indigo-600 text-lg">Voice Cloner</span>
+              <span className="font-bold text-indigo-600 text-lg">Vuclear</span>
               <Link
                 href="/"
                 className="text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors"

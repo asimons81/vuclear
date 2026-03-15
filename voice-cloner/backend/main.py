@@ -1,5 +1,5 @@
 """
-Voice Cloner — FastAPI backend
+Vuclear — FastAPI backend
 """
 import logging
 from contextlib import asynccontextmanager
@@ -12,14 +12,12 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from backend.config import ensure_dirs, settings
+from backend.logging_setup import configure_logging
 from backend.middleware.rate_limit import limiter
 from backend.routers import jobs, outputs, synthesize, voices
 from backend.services import job_service
 
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper(), logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -45,13 +43,13 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_preload_model())
 
     logger.info(
-        "Voice Cloner started | engine=%s | data=%s",
+        "Vuclear started | engine=%s | data=%s",
         settings.voice_engine,
         settings.data_dir,
     )
     yield
     # Shutdown
-    logger.info("Voice Cloner shutting down")
+    logger.info("Vuclear shutting down")
 
 
 def _load_model_sync():
@@ -60,8 +58,8 @@ def _load_model_sync():
 
 
 app = FastAPI(
-    title="Voice Cloner API",
-    description="Local-first voice cloning. MIT/Apache-2.0 code. See README for model weight licenses.",
+    title="Vuclear API",
+    description="Creator-first voice cloning and narration. Local-first, fast, with consent at the center.",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -117,6 +115,11 @@ async def health():
         "gpu": gpu,
         "gpu_name": gpu_name,
         "denoise": settings.denoise,
+        "data_dir": str(settings.data_dir.resolve()),
+        "voices_dir": str(settings.voices_dir.resolve()),
+        "jobs_dir": str(settings.jobs_dir.resolve()),
+        "outputs_dir": str(settings.outputs_dir.resolve()),
+        "logs_dir": str(settings.logs_dir.resolve()),
     }
 
 

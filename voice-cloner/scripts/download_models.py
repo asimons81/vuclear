@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Download and verify model weights for voice-cloner.
+Download and verify model weights for Vuclear.
 
 Usage:
     python scripts/download_models.py [--engine chatterbox|metavoice|f5_noncommercial]

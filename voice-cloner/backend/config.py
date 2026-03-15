@@ -4,6 +4,8 @@ from pydantic import field_validator
 
 
 class Settings(BaseSettings):
+    app_name: str = "vuclear"
+
     # Engine
     voice_engine: str = "chatterbox"
 
@@ -50,8 +52,20 @@ class Settings(BaseSettings):
         return self.data_dir / "jobs"
 
     @property
+    def logs_dir(self) -> Path:
+        return self.data_dir / "logs"
+
+    @property
+    def temp_dir(self) -> Path:
+        return self.data_dir / "tmp"
+
+    @property
     def audit_log(self) -> Path:
-        return self.data_dir / "audit.jsonl"
+        return self.logs_dir / "audit.jsonl"
+
+    @property
+    def app_log(self) -> Path:
+        return self.logs_dir / "service.log"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
@@ -64,5 +78,7 @@ def ensure_dirs() -> None:
         settings.voices_dir,
         settings.outputs_dir,
         settings.jobs_dir,
+        settings.logs_dir,
+        settings.temp_dir,
     ]:
         d.mkdir(parents=True, exist_ok=True)
