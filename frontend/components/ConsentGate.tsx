@@ -16,17 +16,16 @@ export default function ConsentGate({ children }: { children: React.ReactNode })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200 p-6 sm:p-8">
-        <h2 className="text-lg font-semibold text-slate-900 mb-1">Before you continue</h2>
-        <p className="text-sm text-slate-500 mb-5">
-          Vuclear generates synthetic speech from voice samples. You must agree to use
-          this responsibly.
+      <div className="panel max-w-md w-full rounded-[1.75rem] p-6 sm:p-8">
+        <h2 className="section-title text-lg font-semibold mb-1">Before you continue</h2>
+        <p className="section-copy text-sm mb-5">
+          Vuclear generates synthetic speech from voice samples. You must agree to use this responsibly.
         </p>
 
         <ul className="space-y-2.5 mb-6">
           {TERMS.map((term) => (
-            <li key={term} className="flex items-start gap-2.5 text-sm text-slate-700">
-              <span className="text-indigo-600 shrink-0 mt-0.5 font-medium" aria-hidden="true">
+            <li key={term} className="flex items-start gap-2.5 text-sm section-copy">
+              <span className="theme-toggle__icon shrink-0 mt-0.5 !w-5 !h-5 !text-xs" aria-hidden="true">
                 ✓
               </span>
               {term}
@@ -34,14 +33,9 @@ export default function ConsentGate({ children }: { children: React.ReactNode })
           ))}
         </ul>
 
-        <p className="text-xs text-slate-400 mb-6">
-          For legitimate creative, accessibility, and research use only.
-        </p>
+        <p className="hint text-xs mb-6">For legitimate creative, accessibility, and research use only.</p>
 
-        <button
-          onClick={acceptTos}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-lg transition-colors text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-        >
+        <button onClick={acceptTos} className="btn-primary w-full rounded-xl py-2.5 text-sm font-semibold">
           Accept and continue
         </button>
       </div>

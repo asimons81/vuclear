@@ -3,6 +3,8 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import ConsentGate from "@/components/ConsentGate";
 import NavLinks from "@/components/NavLinks";
+import ThemeScript from "@/components/ThemeScript";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const geist = Geist({ subsets: ["latin"] });
 
@@ -16,13 +18,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${geist.className} bg-slate-50 text-slate-900 min-h-screen`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geist.className} app-shell min-h-screen`}>
+        <ThemeScript />
         <ConsentGate>
-          <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-40">
-            <div className="max-w-4xl mx-auto px-6 h-14 flex items-center gap-8">
-              <span className="font-semibold text-white text-base tracking-tight">Vuclear</span>
+          <header className="app-header">
+            <div className="max-w-4xl mx-auto px-6 min-h-16 py-3 flex items-center gap-4">
+              <span className="brand-mark text-base">Vuclear</span>
               <NavLinks />
+              <div className="ml-auto">
+                <ThemeToggle />
+              </div>
             </div>
           </header>
           <main className="max-w-4xl mx-auto px-6 py-8">{children}</main>

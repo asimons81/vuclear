@@ -20,10 +20,8 @@ export default function NavLinks() {
           <Link
             key={href}
             href={href}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-              isActive
-                ? "bg-slate-800 text-white"
-                : "text-slate-400 hover:text-white hover:bg-slate-800"
+            className={`nav-link px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              isActive ? "nav-link-active" : ""
             }`}
             aria-current={isActive ? "page" : undefined}
           >

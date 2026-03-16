@@ -31,22 +31,21 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream, { mimeType: getPreferredMime() });
-      mediaRecorderRef.current = mr;
+      const recorder = new MediaRecorder(stream, { mimeType: getPreferredMime() });
+      mediaRecorderRef.current = recorder;
 
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
       };
 
-      mr.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
         if (animRef.current) cancelAnimationFrame(animRef.current);
-        const blob = new Blob(chunksRef.current, { type: mr.mimeType });
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
         onRecordingComplete(blob);
         setState("done");
       };
 
-      // Waveform visualizer
       const audioCtx = new AudioContext();
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
@@ -55,13 +54,11 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
       analyserRef.current = analyser;
       drawWaveform();
 
-      mr.start(100);
+      recorder.start(100);
       setState("recording");
-
-      timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Microphone access denied";
-      setError(msg);
+      timerRef.current = setInterval(() => setElapsed((seconds) => seconds + 1), 1000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Microphone access denied");
     }
   }
 
@@ -75,68 +72,74 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
     const analyser = analyserRef.current;
     if (!canvas || !analyser) return;
 
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
     const bufferLength = analyser.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
-    function draw() {
+    const draw = () => {
       animRef.current = requestAnimationFrame(draw);
-      analyser!.getByteTimeDomainData(dataArray);
+      analyser.getByteTimeDomainData(dataArray);
 
-      // Use the canvas's intrinsic dimensions for drawing
-      const w = canvas!.width;
-      const h = canvas!.height;
+      const styles = getComputedStyle(document.documentElement);
+      const fill = styles.getPropertyValue("--surface-soft").trim() || "#edf4f2";
+      const stroke = styles.getPropertyValue("--accent").trim() || "#4fb7a0";
+      const width = canvas.width;
+      const height = canvas.height;
 
-      ctx.fillStyle = "#f8fafc"; // slate-50
-      ctx.fillRect(0, 0, w, h);
-
+      ctx.fillStyle = fill;
+      ctx.fillRect(0, 0, width, height);
       ctx.lineWidth = 2;
-      ctx.strokeStyle = "#6366f1"; // indigo-500
+      ctx.strokeStyle = stroke;
       ctx.beginPath();
 
-      const sliceWidth = w / bufferLength;
+      const sliceWidth = width / bufferLength;
       let x = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const v = dataArray[i] / 128;
-        const y = (v * h) / 2;
+
+      for (let i = 0; i < bufferLength; i += 1) {
+        const value = dataArray[i] / 128;
+        const y = (value * height) / 2;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
         x += sliceWidth;
       }
-      ctx.lineTo(w, h / 2);
+
+      ctx.lineTo(width, height / 2);
       ctx.stroke();
-    }
+    };
+
     draw();
   }
 
   useEffect(() => () => clearTimer(), []);
 
-  const fmtTime = (s: number) =>
-    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const fmtTime = (seconds: number) =>
+    `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
   return (
     <div className="space-y-3">
-      {/* High-res canvas buffer (800×120), displayed at CSS height 60px */}
       <canvas
         ref={canvasRef}
         width={800}
         height={120}
-        className="w-full rounded-lg bg-slate-50 border border-slate-200"
+        className="waveform w-full rounded-xl"
         style={{ height: "60px" }}
         aria-label="Audio waveform visualizer"
       />
 
       {error && (
-        <div role="alert" className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-          <p className="text-sm text-red-700">{error}</p>
+        <div role="alert" className="banner-error rounded-xl px-3 py-2.5">
+          <p className="text-sm">{error}</p>
         </div>
       )}
 
       <div className="flex items-center gap-3">
         {state === "idle" && (
           <button
+            type="button"
             onClick={startRecording}
-            className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+            className="button-record flex items-center gap-2 px-4 py-2 rounded-xl text-sm"
             aria-label="Start recording"
           >
             <span className="w-2.5 h-2.5 rounded-full bg-white" aria-hidden="true" />
@@ -146,17 +149,15 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
 
         {state === "recording" && (
           <>
-            <span className="flex items-center gap-2 text-red-600 font-mono font-semibold text-sm">
-              <span
-                className="w-2 h-2 rounded-full bg-red-500 animate-pulse"
-                aria-hidden="true"
-              />
+            <span className="flex items-center gap-2 font-mono font-semibold text-sm" style={{ color: "var(--danger)" }}>
+              <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "var(--danger)" }} aria-hidden="true" />
               {fmtTime(elapsed)}
             </span>
             <button
+              type="button"
               onClick={stopRecording}
               disabled={elapsed < 5}
-              className="bg-slate-700 hover:bg-slate-800 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500"
+              className="button-stop px-4 py-2 rounded-xl text-sm"
               aria-label="Stop recording (minimum 5 seconds)"
             >
               Stop {elapsed < 5 ? `(${5 - elapsed}s)` : ""}
@@ -165,7 +166,7 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
         )}
 
         {state === "done" && (
-          <span className="text-green-700 text-sm font-medium">
+          <span className="text-sm font-medium" style={{ color: "var(--success)" }}>
             Recording captured ({fmtTime(elapsed)})
           </span>
         )}
@@ -181,5 +182,5 @@ function getPreferredMime(): string {
     "audio/ogg;codecs=opus",
     "audio/mp4",
   ];
-  return types.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+  return types.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 }

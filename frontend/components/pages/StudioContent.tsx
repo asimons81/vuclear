@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
 import Link from "next/link";
-import { api, VoiceProfile, Job } from "@/lib/api";
-import ScriptEditor from "@/components/ScriptEditor";
-import JobProgress from "@/components/JobProgress";
+import useSWR from "swr";
+import { api, Job, VoiceProfile } from "@/lib/api";
 import AudioPlayer from "@/components/AudioPlayer";
+import JobProgress from "@/components/JobProgress";
+import ScriptEditor from "@/components/ScriptEditor";
 
 export default function StudioContent() {
   const { data: voices } = useSWR<VoiceProfile[]>("/voices", api.voices.list);
@@ -52,10 +52,6 @@ export default function StudioContent() {
     }
   }
 
-  function handleJobComplete(job: Job) {
-    setCompletedJob(job);
-  }
-
   const isGenerating =
     !!jobId &&
     (!completedJob ||
@@ -65,27 +61,23 @@ export default function StudioContent() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-1">Studio</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="section-title text-2xl font-bold mb-1">Studio</h1>
+        <p className="section-copy text-sm">
           Choose a voice, write your script, and generate.
         </p>
       </div>
 
-      <form onSubmit={handleGenerate} className="space-y-6">
-        {/* Voice selector */}
+      <form onSubmit={handleGenerate} className="panel rounded-2xl p-6 space-y-6">
         <div>
-          <label
-            htmlFor="voice-select"
-            className="block text-sm font-medium text-slate-700 mb-1.5"
-          >
+          <label htmlFor="voice-select" className="label block text-sm font-medium mb-1.5">
             Voice profile
           </label>
           {!voices ? (
-            <p className="text-sm text-slate-500 animate-pulse">Loading voices…</p>
+            <p className="section-copy text-sm animate-pulse">Loading voices...</p>
           ) : voices.length === 0 ? (
-            <p className="text-sm text-slate-500">
+            <p className="section-copy text-sm">
               No voice profiles found.{" "}
-              <Link href="/" className="text-indigo-600 hover:text-indigo-800 font-medium">
+              <Link href="/" className="link-accent font-medium">
                 Add a voice first.
               </Link>
             </p>
@@ -94,33 +86,31 @@ export default function StudioContent() {
               id="voice-select"
               value={voiceId}
               onChange={(e) => setVoiceId(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+              className="select-field rounded-xl px-3 py-2 text-sm"
             >
-              <option value="">Select a voice…</option>
-              {voices.map((v) => (
-                <option key={v.voice_id} value={v.voice_id}>
-                  {v.name} — {v.duration_s.toFixed(1)}s · {v.engine}
+              <option value="">Select a voice...</option>
+              {voices.map((voice) => (
+                <option key={voice.voice_id} value={voice.voice_id}>
+                  {voice.name} - {voice.duration_s.toFixed(1)}s · {voice.engine}
                 </option>
               ))}
             </select>
           )}
         </div>
 
-        {/* Script editor */}
         <ScriptEditor value={script} onChange={setScript} />
 
-        {/* Advanced settings — collapsed by default */}
         <div>
           <button
             type="button"
             id="advanced-settings-toggle"
-            onClick={() => setShowAdvanced((v) => !v)}
+            onClick={() => setShowAdvanced((value) => !value)}
             aria-expanded={showAdvanced}
             aria-controls="advanced-settings-panel"
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors"
+            className="button-ghost inline-flex items-center gap-1.5 text-sm"
           >
             <svg
-              className={`w-3 h-3 transition-transform duration-150 ${showAdvanced ? "rotate-90" : ""}`}
+              className={`h-3 w-3 transition-transform duration-150 ${showAdvanced ? "rotate-90" : ""}`}
               viewBox="0 0 12 12"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -140,15 +130,11 @@ export default function StudioContent() {
           {showAdvanced && (
             <div
               id="advanced-settings-panel"
-              className="mt-3 pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-6"
+              className="mt-3 grid grid-cols-1 gap-6 border-t pt-4 sm:grid-cols-2"
             >
               <div>
-                <label
-                  htmlFor="speed-slider"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
-                >
-                  Speed{" "}
-                  <span className="font-mono text-slate-500">{speed.toFixed(2)}x</span>
+                <label htmlFor="speed-slider" className="label block text-sm font-medium mb-1.5">
+                  Speed <span className="hint font-mono">{speed.toFixed(2)}x</span>
                 </label>
                 <input
                   id="speed-slider"
@@ -158,24 +144,20 @@ export default function StudioContent() {
                   step={0.05}
                   value={speed}
                   onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                  className="w-full accent-indigo-600"
+                  className="w-full"
                   aria-label="Playback speed"
                   aria-valuetext={`${speed.toFixed(2)}x speed`}
                 />
-                <div className="flex justify-between text-xs text-slate-400 mt-1">
-                  <span>0.7×</span>
-                  <span>1.0×</span>
-                  <span>1.3×</span>
+                <div className="hint mt-1 flex justify-between text-xs">
+                  <span>0.7x</span>
+                  <span>1.0x</span>
+                  <span>1.3x</span>
                 </div>
               </div>
 
               <div>
-                <label
-                  htmlFor="pause-slider"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
-                >
-                  Sentence pause{" "}
-                  <span className="font-mono text-slate-500">{pauseMs}ms</span>
+                <label htmlFor="pause-slider" className="label block text-sm font-medium mb-1.5">
+                  Sentence pause <span className="hint font-mono">{pauseMs}ms</span>
                 </label>
                 <input
                   id="pause-slider"
@@ -184,12 +166,12 @@ export default function StudioContent() {
                   max={1000}
                   step={50}
                   value={pauseMs}
-                  onChange={(e) => setPauseMs(parseInt(e.target.value))}
-                  className="w-full accent-indigo-600"
+                  onChange={(e) => setPauseMs(Number.parseInt(e.target.value, 10))}
+                  className="w-full"
                   aria-label="Pause between sentences in milliseconds"
                   aria-valuetext={`${pauseMs} milliseconds`}
                 />
-                <div className="flex justify-between text-xs text-slate-400 mt-1">
+                <div className="hint mt-1 flex justify-between text-xs">
                   <span>0ms</span>
                   <span>500ms</span>
                   <span>1s</span>
@@ -200,36 +182,31 @@ export default function StudioContent() {
         </div>
 
         {error && (
-          <div
-            role="alert"
-            className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5"
-          >
-            <p className="text-sm text-red-700">{error}</p>
+          <div role="alert" className="banner-error rounded-xl px-3 py-2.5">
+            <p className="text-sm">{error}</p>
           </div>
         )}
 
         <button
           type="submit"
           disabled={submitting || isGenerating}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="btn-primary w-full rounded-xl py-2.5 text-sm font-semibold disabled:opacity-50"
         >
-          {submitting ? "Queuing…" : isGenerating ? "Generating…" : "Generate audio"}
+          {submitting ? "Queuing..." : isGenerating ? "Generating..." : "Generate audio"}
         </button>
       </form>
 
-      {/* Job progress */}
       {jobId && !completedJob && (
         <section aria-label="Generation progress">
-          <JobProgress jobId={jobId} onComplete={handleJobComplete} />
+          <JobProgress jobId={jobId} onComplete={setCompletedJob} />
         </section>
       )}
 
-      {/* Result */}
       {completedJob && completedJob.status === "completed" && completedJob.output_id && (
         <section aria-label="Generated audio" aria-live="polite">
-          <div className="flex items-center gap-2.5 mb-3">
-            <h2 className="text-sm font-semibold text-slate-900">Generated audio</h2>
-            <span className="text-xs font-medium text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">
+          <div className="mb-3 flex items-center gap-2.5">
+            <h2 className="section-title text-sm font-semibold">Generated audio</h2>
+            <span className="badge badge-success rounded-full px-2 py-0.5 text-xs font-medium">
               Ready
             </span>
           </div>
@@ -238,9 +215,9 @@ export default function StudioContent() {
       )}
 
       {completedJob && completedJob.status === "failed" && (
-        <div role="alert" className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm font-medium text-red-700 mb-0.5">Generation failed</p>
-          <p className="text-sm text-red-600">{completedJob.error}</p>
+        <div role="alert" className="banner-error rounded-xl p-4">
+          <p className="text-sm font-medium mb-0.5">Generation failed</p>
+          <p className="text-sm">{completedJob.error}</p>
         </div>
       )}
     </div>
