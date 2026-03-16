@@ -5,6 +5,7 @@ INPUT  → normalize → trim silence → [denoise] → reference.wav
 SCRIPT → chunk → synthesize per chunk → concat → loudness norm → WAV + MP3
 """
 import logging
+import json
 import re
 import subprocess
 import tempfile
@@ -82,23 +83,110 @@ def _apply_deepfilter(audio: np.ndarray, sr: int) -> np.ndarray:
         return audio
 
 
+def _parse_ffprobe_duration_tag(value: str) -> float | None:
+    try:
+        hours, minutes, seconds = value.split(":")
+        return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _decode_audio_duration(path: Path) -> float:
+    """
+    Decode audio to PCM WAV and derive duration from sample count.
+    This is the final fallback when container metadata is incomplete.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_wav = Path(tmp.name)
+
+    cmd = [
+        "ffmpeg", "-y", "-i", str(path),
+        "-vn",
+        "-acodec", "pcm_s16le",
+        str(tmp_wav),
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        tmp_wav.unlink(missing_ok=True)
+        raise RuntimeError(f"ffmpeg decode failed: {result.stderr}")
+
+    try:
+        info = sf.info(str(tmp_wav))
+        if info.samplerate <= 0 or info.frames <= 0:
+            raise ValueError("Decoded audio has no measurable samples")
+        duration = info.frames / info.samplerate
+        logger.info(
+            "Audio duration detected via decoded PCM fallback | path=%s duration_s=%.3f",
+            path,
+            duration,
+        )
+        return duration
+    finally:
+        tmp_wav.unlink(missing_ok=True)
+
+
 def get_audio_duration(path: Path) -> float:
-    """Return audio duration in seconds via ffprobe."""
+    """Return audio duration in seconds using layered metadata and decode fallbacks."""
     cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
         "-show_streams",
+        "-show_format",
         str(path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"ffprobe failed: {result.stderr}")
-    import json
-    data = json.loads(result.stdout)
+        logger.warning(
+            "ffprobe failed for duration detection | path=%s stderr=%s",
+            path,
+            result.stderr.strip(),
+        )
+        return _decode_audio_duration(path)
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        logger.warning("ffprobe returned invalid JSON | path=%s error=%s", path, e)
+        return _decode_audio_duration(path)
+
     for stream in data.get("streams", []):
-        if "duration" in stream:
-            return float(stream["duration"])
-    raise ValueError("No duration found in ffprobe output")
+        duration_value = stream.get("duration")
+        if duration_value not in (None, "N/A"):
+            duration = float(duration_value)
+            logger.info(
+                "Audio duration detected via ffprobe stream.duration | path=%s duration_s=%.3f",
+                path,
+                duration,
+            )
+            return duration
+        tags = stream.get("tags") or {}
+        for key in ("DURATION", "duration"):
+            tagged_duration = _parse_ffprobe_duration_tag(tags.get(key))
+            if tagged_duration is not None:
+                logger.info(
+                    "Audio duration detected via ffprobe stream.tags.%s | path=%s duration_s=%.3f",
+                    key,
+                    path,
+                    tagged_duration,
+                )
+                return tagged_duration
+
+    format_data = data.get("format") or {}
+    format_duration_value = format_data.get("duration")
+    if format_duration_value not in (None, "N/A"):
+        duration = float(format_duration_value)
+        logger.info(
+            "Audio duration detected via ffprobe format.duration | path=%s duration_s=%.3f",
+            path,
+            duration,
+        )
+        return duration
+
+    logger.info(
+        "Audio duration metadata missing; falling back to decoded PCM measurement | path=%s",
+        path,
+    )
+    return _decode_audio_duration(path)
 
 
 def validate_audio_file(path: Path) -> tuple[str, float]:
@@ -118,11 +206,14 @@ def validate_audio_file(path: Path) -> tuple[str, float]:
         "audio/mpeg", "audio/mp3",
         "audio/wav", "audio/x-wav",
         "audio/ogg", "audio/flac",
+        "audio/webm", "video/webm",
         "audio/mp4", "audio/x-m4a",
         "video/mp4",  # some m4a files report as mp4
     }
     if mime not in allowed_mimes:
-        raise ValueError(f"Unsupported file type: {mime}. Upload WAV, MP3, OGG, M4A, or FLAC.")
+        raise ValueError(
+            f"Unsupported file type: {mime}. Upload WAV, MP3, OGG, WebM, M4A, or FLAC."
+        )
 
     duration = get_audio_duration(path)
     if duration < 5:
