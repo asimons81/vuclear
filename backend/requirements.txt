@@ -1,3 +1,8 @@
+# ─── Build Tools ──────────────────────────────────────────────────────────────
+# setuptools<80 required: perth (Chatterbox watermarking) uses pkg_resources
+# which was removed as a standalone module in setuptools 80+
+setuptools<80
+
 # ─── Web Framework ────────────────────────────────────────────────────────────
 fastapi==0.115.6
 uvicorn[standard]==0.32.1
