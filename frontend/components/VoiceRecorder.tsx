@@ -40,7 +40,7 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
 
       mr.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
-        cancelAnimationFrame(animRef.current!);
+        if (animRef.current) cancelAnimationFrame(animRef.current);
         const blob = new Blob(chunksRef.current, { type: mr.mimeType });
         onRecordingComplete(blob);
         setState("done");
@@ -83,23 +83,27 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
       animRef.current = requestAnimationFrame(draw);
       analyser!.getByteTimeDomainData(dataArray);
 
-      ctx.fillStyle = "#f1f5f9";
-      ctx.fillRect(0, 0, canvas!.width, canvas!.height);
+      // Use the canvas's intrinsic dimensions for drawing
+      const w = canvas!.width;
+      const h = canvas!.height;
+
+      ctx.fillStyle = "#f8fafc"; // slate-50
+      ctx.fillRect(0, 0, w, h);
 
       ctx.lineWidth = 2;
-      ctx.strokeStyle = "#6366f1";
+      ctx.strokeStyle = "#6366f1"; // indigo-500
       ctx.beginPath();
 
-      const sliceWidth = canvas!.width / bufferLength;
+      const sliceWidth = w / bufferLength;
       let x = 0;
       for (let i = 0; i < bufferLength; i++) {
         const v = dataArray[i] / 128;
-        const y = (v * canvas!.height) / 2;
+        const y = (v * h) / 2;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
         x += sliceWidth;
       }
-      ctx.lineTo(canvas!.width, canvas!.height / 2);
+      ctx.lineTo(w, h / 2);
       ctx.stroke();
     }
     draw();
@@ -112,42 +116,47 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
 
   return (
     <div className="space-y-3">
+      {/* High-res canvas buffer (800×120), displayed at CSS height 60px */}
       <canvas
         ref={canvasRef}
-        width={400}
-        height={60}
-        className="w-full rounded-lg bg-slate-100"
+        width={800}
+        height={120}
+        className="w-full rounded-lg bg-slate-50 border border-slate-200"
+        style={{ height: "60px" }}
         aria-label="Audio waveform visualizer"
       />
 
       {error && (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
+        <div role="alert" className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
       )}
 
       <div className="flex items-center gap-3">
         {state === "idle" && (
           <button
             onClick={startRecording}
-            className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
+            className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-red-400"
             aria-label="Start recording"
           >
-            <span className="w-3 h-3 rounded-full bg-white" />
+            <span className="w-2.5 h-2.5 rounded-full bg-white" aria-hidden="true" />
             Record
           </button>
         )}
 
         {state === "recording" && (
           <>
-            <span className="flex items-center gap-2 text-red-600 font-mono font-semibold">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            <span className="flex items-center gap-2 text-red-600 font-mono font-semibold text-sm">
+              <span
+                className="w-2 h-2 rounded-full bg-red-500 animate-pulse"
+                aria-hidden="true"
+              />
               {fmtTime(elapsed)}
             </span>
             <button
               onClick={stopRecording}
               disabled={elapsed < 5}
-              className="bg-gray-700 hover:bg-gray-800 disabled:opacity-40 text-white px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
+              className="bg-slate-700 hover:bg-slate-800 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500"
               aria-label="Stop recording (minimum 5 seconds)"
             >
               Stop {elapsed < 5 ? `(${5 - elapsed}s)` : ""}
@@ -156,7 +165,7 @@ export default function VoiceRecorder({ onRecordingComplete }: Props) {
         )}
 
         {state === "done" && (
-          <span className="text-green-600 font-medium">
+          <span className="text-green-700 text-sm font-medium">
             Recording captured ({fmtTime(elapsed)})
           </span>
         )}
