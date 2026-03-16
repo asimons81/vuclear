@@ -228,6 +228,28 @@ def validate_audio_file(path: Path) -> tuple[str, float]:
 
 def split_script(text: str, chunk_size: int = CHUNK_MAX_CHARS) -> list[str]:
     """Split script into synthesis chunks at sentence boundaries."""
+    def split_long_sentence(sentence: str) -> list[str]:
+        words = sentence.split()
+        if not words:
+            return []
+
+        parts: list[str] = []
+        current_part = ""
+
+        for word in words:
+            if not current_part:
+                current_part = word
+            elif len(current_part) + 1 + len(word) <= chunk_size:
+                current_part += " " + word
+            else:
+                parts.append(current_part)
+                current_part = word
+
+        if current_part:
+            parts.append(current_part)
+
+        return parts
+
     # Split on sentence endings
     sentences = re.split(r'(?<=[.!?])\s+', text.strip())
 
@@ -239,25 +261,26 @@ def split_script(text: str, chunk_size: int = CHUNK_MAX_CHARS) -> list[str]:
         if not sentence:
             continue
 
+        if len(sentence) > chunk_size:
+            if current:
+                chunks.append(current)
+                current = ""
+
+            long_parts = split_long_sentence(sentence)
+            if not long_parts:
+                continue
+
+            chunks.extend(long_parts[:-1])
+            current = long_parts[-1]
+            continue
+
         if not current:
             current = sentence
         elif len(current) + 1 + len(sentence) <= chunk_size:
             current += " " + sentence
         else:
             chunks.append(current)
-            # If single sentence exceeds chunk_size, split by words
-            if len(sentence) > chunk_size:
-                words = sentence.split()
-                current = ""
-                for word in words:
-                    if len(current) + 1 + len(word) <= chunk_size:
-                        current = (current + " " + word).strip()
-                    else:
-                        if current:
-                            chunks.append(current)
-                        current = word
-            else:
-                current = sentence
+            current = sentence
 
     if current:
         chunks.append(current)
