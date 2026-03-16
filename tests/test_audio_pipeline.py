@@ -1,5 +1,7 @@
 """Unit tests for audio pipeline utilities."""
+import sys
 import tempfile
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -91,3 +93,108 @@ class TestValidateAudioFile:
         f.write_text("not audio content")
         with pytest.raises((ValueError, Exception)):
             validate_audio_file(f)
+
+    def test_accepts_webm_magic_type(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from backend.services import audio_pipeline
+
+        f = tmp_path / "sample.webm"
+        f.write_bytes(b"webm")
+
+        class FakeMagic:
+            @staticmethod
+            def from_file(path: str, mime: bool = True) -> str:
+                assert mime is True
+                return "video/webm"
+
+        monkeypatch.setitem(sys.modules, "magic", FakeMagic)
+        monkeypatch.setattr(audio_pipeline, "get_audio_duration", lambda path: 6.0)
+
+        mime, duration = audio_pipeline.validate_audio_file(f)
+        assert mime == "video/webm"
+        assert duration == 6.0
+
+
+class TestGetAudioDuration:
+    def test_uses_stream_duration_first(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        from backend.services.audio_pipeline import get_audio_duration
+
+        audio_path = tmp_path / "sample.webm"
+        audio_path.write_bytes(b"webm")
+
+        def fake_run(cmd: list[str], capture_output: bool, text: bool):
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout='{"streams":[{"codec_type":"audio","duration":"5.5"}],"format":{}}',
+                stderr="",
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        assert get_audio_duration(audio_path) == pytest.approx(5.5)
+
+    def test_uses_format_duration_fallback(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        from backend.services.audio_pipeline import get_audio_duration
+
+        audio_path = tmp_path / "sample.webm"
+        audio_path.write_bytes(b"webm")
+
+        def fake_run(cmd: list[str], capture_output: bool, text: bool):
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout='{"streams":[{"codec_type":"audio"}],"format":{"duration":"6.125"}}',
+                stderr="",
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        assert get_audio_duration(audio_path) == pytest.approx(6.125)
+
+    def test_uses_stream_tag_duration_fallback(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        from backend.services.audio_pipeline import get_audio_duration
+
+        audio_path = tmp_path / "sample.webm"
+        audio_path.write_bytes(b"webm")
+
+        def fake_run(cmd: list[str], capture_output: bool, text: bool):
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout='{"streams":[{"codec_type":"audio","tags":{"DURATION":"00:00:06.500"}}],"format":{}}',
+                stderr="",
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        assert get_audio_duration(audio_path) == pytest.approx(6.5)
+
+    def test_uses_decoded_pcm_fallback_when_metadata_missing(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ):
+        from backend.services import audio_pipeline
+
+        audio_path = tmp_path / "sample.webm"
+        audio_path.write_bytes(b"webm")
+
+        def fake_run(cmd: list[str], capture_output: bool, text: bool):
+            if cmd[0] == "ffprobe":
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout='{"streams":[{"codec_type":"audio"}],"format":{}}',
+                    stderr="",
+                )
+            if cmd[0] == "ffmpeg":
+                Path(cmd[-1]).write_bytes(b"decoded")
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+            raise AssertionError(f"Unexpected command: {cmd}")
+
+        class FakeInfo:
+            samplerate = 16000
+            frames = 96000
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        monkeypatch.setattr(audio_pipeline.sf, "info", lambda path: FakeInfo())
+
+        assert audio_pipeline.get_audio_duration(audio_path) == pytest.approx(6.0)
