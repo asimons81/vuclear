@@ -11,8 +11,16 @@ export default function AudioPlayer({ outputId }: Props) {
   const mp3Url = api.outputs.downloadUrl(outputId, "mp3");
 
   return (
-    <div className="panel rounded-2xl p-4 space-y-3">
-      <audio src={wavUrl} controls className="w-full" aria-label="Generated audio" />
+    <div className="audio-panel rounded-2xl p-4 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="section-title text-sm font-semibold">Playback</p>
+          <p className="hint text-xs">Preview the generated file before downloading.</p>
+        </div>
+        <span className="badge text-xs px-2 py-0.5 rounded-full font-medium">WAV ready</span>
+      </div>
+
+      <audio src={wavUrl} controls className="audio-native" aria-label="Generated audio" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <a
