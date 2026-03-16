@@ -23,32 +23,40 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    ensure_dirs()
-    job_service._load_jobs_from_disk()
-
-    # Pre-load model in background (non-blocking for startup, loads on first request if not done)
     import asyncio
     import concurrent.futures
 
-    loop = asyncio.get_event_loop()
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-
-    async def _preload_model():
-        try:
-            await loop.run_in_executor(executor, _load_model_sync)
-        except Exception as e:
-            logger.warning("Model preload failed (will retry on first request): %s", e)
-
-    asyncio.create_task(_preload_model())
+    # Startup
+    ensure_dirs()
+    job_service._load_jobs_from_disk()
 
     logger.info(
         "Vuclear started | engine=%s | data=%s",
         settings.voice_engine,
         settings.data_dir,
     )
+
+    # Pre-load model in a background thread — non-blocking for startup.
+    # The factory singleton is thread-safe; a single load is guaranteed.
+    # Health reports engine_loading=true until this finishes.
+    loop = asyncio.get_running_loop()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="model-preload")
+
+    async def _preload_model():
+        try:
+            logger.info("Model preload starting in background thread")
+            await loop.run_in_executor(executor, _load_model_sync)
+            logger.info("Model preload complete")
+        except Exception as e:
+            logger.warning(
+                "Model preload failed (will retry on first synthesis request): %s", e
+            )
+
+    loop.create_task(_preload_model())
+
     yield
     # Shutdown
+    executor.shutdown(wait=False)
     logger.info("Vuclear shutting down")
 
 
@@ -68,6 +76,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,6 +96,13 @@ app.include_router(outputs.router)
 
 @app.get("/api/v1/health", tags=["health"])
 async def health():
+    """
+    Liveness + readiness endpoint.
+
+    Always returns HTTP 200 as long as the API process is running.
+    engine_loaded / engine_loading reflect background model state without
+    blocking the response or triggering a load attempt.
+    """
     try:
         import torch
         gpu = torch.cuda.is_available()
@@ -95,23 +111,17 @@ async def health():
         gpu = False
         gpu_name = None
 
-    from backend.services.model.factory import get_model
-    try:
-        model = get_model()
-        engine_loaded = model.is_loaded
-        engine_commercial = model.COMMERCIAL_OK
-        engine_license = model.LICENSE
-    except Exception:
-        engine_loaded = False
-        engine_commercial = None
-        engine_license = None
+    from backend.services.model.factory import get_model_status
+    ms = get_model_status()
 
     return {
         "status": "ok",
         "engine": settings.voice_engine,
-        "engine_loaded": engine_loaded,
-        "engine_license": engine_license,
-        "commercial_ok": engine_commercial,
+        "engine_loaded": ms["loaded"],
+        "engine_loading": ms["loading"],
+        "engine_error": ms["error"],
+        "engine_license": ms["license"],
+        "commercial_ok": ms["commercial_ok"],
         "gpu": gpu,
         "gpu_name": gpu_name,
         "denoise": settings.denoise,

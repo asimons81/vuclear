@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     cors_origins: str = "http://localhost:3000"
+    cors_origin_regex: str = (
+        r"https?://("
+        r"localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|"
+        r"192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+"
+        r")(:\d+)?$"
+    )
 
     # Rate limiting
     rate_limit_voice_upload: str = "10/hour"
