@@ -1,4 +1,14 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+function resolveApiBase(): string {
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configured) return configured;
+
+  if (typeof window !== "undefined") {
+    const { protocol, hostname } = window.location;
+    return `${protocol}//${hostname}:8000`;
+  }
+
+  return "http://127.0.0.1:8000";
+}
 
 export type VoiceProfile = {
   voice_id: string;
@@ -42,7 +52,8 @@ async function req<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const apiBase = resolveApiBase();
+  const res = await fetch(`${apiBase}${path}`, {
     ...init,
     headers: { "Accept": "application/json", ...init?.headers },
   });
@@ -60,7 +71,7 @@ export const api = {
     create: (form: FormData) =>
       req<VoiceProfile>("/api/v1/voices", { method: "POST", body: form }),
     delete: (voiceId: string) =>
-      fetch(`${API_BASE}/api/v1/voices/${voiceId}`, { method: "DELETE" }),
+      fetch(`${resolveApiBase()}/api/v1/voices/${voiceId}`, { method: "DELETE" }),
   },
 
   synthesize: (body: {
@@ -83,9 +94,9 @@ export const api = {
   outputs: {
     list: () => req<Output[]>("/api/v1/outputs"),
     downloadUrl: (outputId: string, format: "wav" | "mp3") =>
-      `${API_BASE}/api/v1/outputs/${outputId}/download?format=${format}`,
+      `${resolveApiBase()}/api/v1/outputs/${outputId}/download?format=${format}`,
     delete: (outputId: string) =>
-      fetch(`${API_BASE}/api/v1/outputs/${outputId}`, { method: "DELETE" }),
+      fetch(`${resolveApiBase()}/api/v1/outputs/${outputId}`, { method: "DELETE" }),
   },
 
   health: () => req<HealthResponse>("/api/v1/health"),
