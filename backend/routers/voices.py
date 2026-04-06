@@ -183,7 +183,7 @@ async def list_voices():
 async def add_voice_sample(
     voice_id: str,
     file: Annotated[UploadFile, File(description="Additional reference audio")],
-    note: Annotated[str | None, Form(default=None, max_length=160)] = None,
+    note: Annotated[str | None, Form(max_length=160)] = None,
 ):
     profile = voice_service.get_voice_profile(voice_id)
     if not profile:

@@ -2,6 +2,10 @@
 
 Local-first voice cloning and narration for creators who want usable audio without handing the work to a cloud service.
 
+## Preview
+
+![Vuclear UI](docs/assets/vuclear-ui-crop.png)
+
 Vuclear lets you:
 - create voice profiles from consented reference audio
 - generate narration from text
