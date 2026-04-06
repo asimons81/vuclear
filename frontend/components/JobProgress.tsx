@@ -13,13 +13,17 @@ const STATUS_LABELS: Record<string, string> = {
   processing: "Synthesizing audio",
   completed: "Complete",
   failed: "Failed",
+  cancelled: "Cancelled",
 };
 
 export default function JobProgress({ jobId, onComplete }: Props) {
   const { data: job, error } = useSWR<Job>(jobId ? `/jobs/${jobId}` : null, () => api.jobs.get(jobId), {
-    refreshInterval: (value) => (value?.status === "queued" || value?.status === "processing" ? 1500 : 0),
+    refreshInterval: (value) =>
+      value?.status === "queued" || value?.status === "processing" ? 1500 : 0,
     onSuccess: (value) => {
-      if (value.status === "completed" || value.status === "failed") onComplete(value);
+      if (value.status === "completed" || value.status === "failed" || value.status === "cancelled") {
+        onComplete(value);
+      }
     },
   });
 
@@ -43,9 +47,11 @@ export default function JobProgress({ jobId, onComplete }: Props) {
             color:
               job.status === "failed"
                 ? "var(--danger-text)"
-                : job.status === "completed"
-                  ? "var(--success-text)"
-                  : "var(--text)",
+                : job.status === "cancelled"
+                  ? "var(--text-muted)"
+                  : job.status === "completed"
+                    ? "var(--success-text)"
+                    : "var(--text)",
           }}
         >
           {label}

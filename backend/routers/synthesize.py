@@ -8,7 +8,7 @@ from backend.services import job_service, voice_service
 
 router = APIRouter(prefix="/api/v1/synthesize", tags=["synthesize"])
 
-MAX_SCRIPT_CHARS = 2000
+MAX_SCRIPT_CHARS = 50000
 
 
 class SynthesizeRequest(BaseModel):
@@ -16,6 +16,9 @@ class SynthesizeRequest(BaseModel):
     script: str = Field(min_length=1, max_length=MAX_SCRIPT_CHARS)
     speed: float = Field(default=1.0, ge=0.7, le=1.3)
     pause_ms: int = Field(default=300, ge=0, le=1000)
+    chunk_size: int = Field(default=800, ge=100, le=5000)
+    crossfade_ms: int = Field(default=120, ge=0, le=200)
+    effects_preset: str | None = Field(default=None, max_length=32)
 
 
 class SynthesizeResponse(BaseModel):
@@ -46,7 +49,11 @@ async def synthesize(req: SynthesizeRequest):
         script=req.script.strip(),
         speed=req.speed,
         pause_ms=req.pause_ms,
+        chunk_size=req.chunk_size,
+        crossfade_ms=req.crossfade_ms,
+        effects_preset=req.effects_preset,
     )
+
 
     job_service.submit_job(job["job_id"])
 

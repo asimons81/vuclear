@@ -17,11 +17,15 @@ import soundfile as sf
 import librosa
 import pyloudnorm as pyln
 
+from backend.services.effects import apply_effects
+
 logger = logging.getLogger(__name__)
 
 TARGET_SR = 44100          # Output sample rate
 TARGET_LUFS = -14.0        # Streaming standard (Spotify/YouTube target)
-CHUNK_MAX_CHARS = 200
+CHUNK_MAX_CHARS = 800
+LONG_FORM_MAX_CHARS = 50000
+DEFAULT_CROSSFADE_MS = 120
 REFERENCE_SR = 16000       # Model input sample rate
 
 
@@ -226,66 +230,169 @@ def validate_audio_file(path: Path) -> tuple[str, float]:
 
 # ─── Script Processing ────────────────────────────────────────────────────────
 
-def split_script(text: str, chunk_size: int = CHUNK_MAX_CHARS) -> list[str]:
-    """Split script into synthesis chunks at sentence boundaries."""
-    def split_long_sentence(sentence: str) -> list[str]:
-        words = sentence.split()
-        if not words:
-            return []
+_ABBREVIATION_MARKERS = {
+    "Dr.": "Dr<prd>",
+    "Mr.": "Mr<prd>",
+    "Mrs.": "Mrs<prd>",
+    "Ms.": "Ms<prd>",
+    "Prof.": "Prof<prd>",
+    "Sr.": "Sr<prd>",
+    "Jr.": "Jr<prd>",
+    "St.": "St<prd>",
+    "vs.": "vs<prd>",
+    "etc.": "etc<prd>",
+    "e.g.": "e<prd>g<prd>",
+    "i.e.": "i<prd>e<prd>",
+    "U.S.": "U<prd>S<prd>",
+    "U.K.": "U<prd>K<prd>",
+}
 
-        parts: list[str] = []
-        current_part = ""
+_SENTENCE_ENDINGS = {".", "!", "?", "。", "！", "？"}
 
-        for word in words:
-            if not current_part:
-                current_part = word
-            elif len(current_part) + 1 + len(word) <= chunk_size:
-                current_part += " " + word
-            else:
-                parts.append(current_part)
-                current_part = word
 
-        if current_part:
+def _protect_abbreviations(text: str) -> str:
+    protected = text
+    for abbreviation, marker in sorted(_ABBREVIATION_MARKERS.items(), key=lambda item: len(item[0]), reverse=True):
+        protected = protected.replace(abbreviation, marker)
+    return protected
+
+
+def _restore_abbreviations(text: str) -> str:
+    restored = text
+    for abbreviation, marker in _ABBREVIATION_MARKERS.items():
+        restored = restored.replace(marker, abbreviation)
+    return restored
+
+
+def _split_long_sentence(sentence: str, chunk_size: int) -> list[str]:
+    sentence = sentence.strip()
+    if not sentence:
+        return []
+
+    if " " not in sentence:
+        return [sentence[i : i + chunk_size] for i in range(0, len(sentence), chunk_size)]
+
+    words = sentence.split()
+    parts: list[str] = []
+    current_part = ""
+
+    for word in words:
+        if not current_part:
+            current_part = word
+        elif len(current_part) + 1 + len(word) <= chunk_size:
+            current_part += " " + word
+        else:
             parts.append(current_part)
+            current_part = word
 
-        return parts
+    if current_part:
+        parts.append(current_part)
 
-    # Split on sentence endings
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    return parts
 
-    chunks: list[str] = []
+
+def split_script(text: str, chunk_size: int = CHUNK_MAX_CHARS) -> list[str]:
+    """Split script into synthesis chunks at sentence boundaries.
+
+    Handles common abbreviations, CJK punctuation, and bracketed tags.
+    """
+    protected_text = _protect_abbreviations(text.strip())
+    if not protected_text:
+        return []
+
+    sentences: list[str] = []
     current = ""
 
+    for index, char in enumerate(protected_text):
+        current += char
+        if char not in _SENTENCE_ENDINGS:
+            continue
+
+        if char == ".":
+            prev_char = protected_text[index - 1] if index > 0 else ""
+            next_char = protected_text[index + 1] if index + 1 < len(protected_text) else ""
+            if prev_char.isdigit() and next_char.isdigit():
+                continue
+            if next_char == ".":
+                continue
+
+        sentence = _restore_abbreviations(current.strip())
+        if sentence:
+            sentences.append(sentence)
+        current = ""
+
+    trailing = _restore_abbreviations(current.strip())
+    if trailing:
+        sentences.append(trailing)
+
+    def can_merge_sentence(sentence_text: str) -> bool:
+        has_cjk = bool(re.search(r"[\u4e00-\u9fff\u3040-\u30ff\uf900-\ufaff]", sentence_text))
+        starts_with_tag = bool(re.match(r"^\[[^\]]+\]", sentence_text))
+        return not has_cjk and not starts_with_tag
+
+    chunks: list[str] = []
+    current_chunk = ""
+
     for sentence in sentences:
+        if len(sentence) > chunk_size:
+            if current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = ""
+
+            long_parts = _split_long_sentence(sentence, chunk_size)
+            chunks.extend(part for part in long_parts if part.strip())
+            continue
+
         sentence = sentence.strip()
         if not sentence:
             continue
 
-        if len(sentence) > chunk_size:
-            if current:
-                chunks.append(current)
-                current = ""
-
-            long_parts = split_long_sentence(sentence)
-            if not long_parts:
-                continue
-
-            chunks.extend(long_parts[:-1])
-            current = long_parts[-1]
+        if not current_chunk:
+            current_chunk = sentence
             continue
 
-        if not current:
-            current = sentence
-        elif len(current) + 1 + len(sentence) <= chunk_size:
-            current += " " + sentence
+        if can_merge_sentence(current_chunk) and can_merge_sentence(sentence) and len(current_chunk) + 1 + len(sentence) <= chunk_size:
+            current_chunk += " " + sentence
         else:
-            chunks.append(current)
-            current = sentence
+            chunks.append(current_chunk)
+            current_chunk = sentence
 
-    if current:
-        chunks.append(current)
+    if current_chunk:
+        chunks.append(current_chunk)
 
-    return [c for c in chunks if c.strip()]
+    return [chunk for chunk in chunks if chunk.strip()]
+
+
+def join_audio_chunks_with_crossfade(
+    chunks: list[np.ndarray],
+    *,
+    sample_rate: int,
+    crossfade_ms: int = DEFAULT_CROSSFADE_MS,
+) -> np.ndarray:
+    """Join mono chunks with an overlap crossfade."""
+    if not chunks:
+        return np.array([], dtype=np.float32)
+
+    arrays = [np.asarray(chunk, dtype=np.float32).ravel() for chunk in chunks if np.asarray(chunk).size]
+    if not arrays:
+        return np.array([], dtype=np.float32)
+    if len(arrays) == 1:
+        return arrays[0].astype(np.float32, copy=False)
+
+    crossfade_samples = int(sample_rate * max(0, crossfade_ms) / 1000)
+    crossfade_samples = min(crossfade_samples, *(len(chunk) for chunk in arrays)) if crossfade_samples > 0 else 0
+    if crossfade_samples < 2:
+        return np.concatenate(arrays).astype(np.float32, copy=False)
+
+    fade_in = np.linspace(0.0, 1.0, crossfade_samples, dtype=np.float32)
+    fade_out = 1.0 - fade_in
+
+    output = arrays[0]
+    for chunk in arrays[1:]:
+        overlap = output[-crossfade_samples:] * fade_out + chunk[:crossfade_samples] * fade_in
+        output = np.concatenate([output[:-crossfade_samples], overlap, chunk[crossfade_samples:]])
+
+    return np.clip(output, -1.0, 1.0).astype(np.float32, copy=False)
 
 
 # ─── Full Synthesis Pipeline ──────────────────────────────────────────────────
@@ -296,6 +403,9 @@ def run_synthesis_pipeline(
     output_dir: Path,
     speed: float = 1.0,
     pause_ms: int = 300,
+    effects_preset: str | None = None,
+    chunk_size: int = CHUNK_MAX_CHARS,
+    crossfade_ms: int = DEFAULT_CROSSFADE_MS,
     model=None,
     progress_cb: Callable[[float], None] | None = None,
 ) -> tuple[Path, Path, float]:
@@ -308,7 +418,10 @@ def run_synthesis_pipeline(
     if model is None:
         model = get_model()
 
-    chunks = split_script(script)
+    if len(script.strip()) > LONG_FORM_MAX_CHARS:
+        raise ValueError(f"Script too long ({len(script.strip())} chars). Maximum {LONG_FORM_MAX_CHARS} characters.")
+
+    chunks = split_script(script, chunk_size=chunk_size)
     if not chunks:
         raise ValueError("Script is empty after processing")
 
@@ -317,7 +430,7 @@ def run_synthesis_pipeline(
     audio_segments: list[np.ndarray] = []
     model_sr = model.SAMPLE_RATE
 
-    # Silence padding between chunks
+    # Silence padding between chunks is only used when crossfade is disabled.
     pause_samples = int(model_sr * pause_ms / 1000)
     silence = np.zeros(pause_samples, dtype=np.float32)
 
@@ -325,18 +438,24 @@ def run_synthesis_pipeline(
         logger.debug("Chunk %d/%d: %r", i + 1, len(chunks), chunk[:60])
         chunk_audio = model.synthesize(text=chunk, reference_wav=reference_wav, speed=speed)
         audio_segments.append(chunk_audio)
-        if i < len(chunks) - 1:
+        if i < len(chunks) - 1 and crossfade_ms <= 0:
             audio_segments.append(silence)
 
         if progress_cb:
             progress_cb((i + 1) / len(chunks) * 0.8)  # 0–80% for synthesis
 
-    # Concatenate
-    combined = np.concatenate(audio_segments)
+    # Concatenate with overlap crossfade when enabled.
+    if crossfade_ms > 0:
+        combined = join_audio_chunks_with_crossfade(audio_segments, sample_rate=model_sr, crossfade_ms=crossfade_ms)
+    else:
+        combined = np.concatenate(audio_segments)
 
     # Resample to 44100 Hz
     if model_sr != TARGET_SR:
         combined = librosa.resample(combined, orig_sr=model_sr, target_sr=TARGET_SR)
+
+    if effects_preset:
+        combined = apply_effects(combined, TARGET_SR, preset=effects_preset)
 
     # Loudness normalize to -14 LUFS
     meter = pyln.Meter(TARGET_SR)

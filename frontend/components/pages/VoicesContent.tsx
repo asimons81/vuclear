@@ -17,7 +17,9 @@ export default function VoicesContent() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [sampleTargetVoiceId, setSampleTargetVoiceId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sampleInputRef = useRef<HTMLInputElement>(null);
 
   const { data: voices, mutate } = useSWR<VoiceProfile[]>("/voices", api.voices.list);
 
@@ -60,6 +62,31 @@ export default function VoicesContent() {
     setPendingDeleteId(null);
     await api.voices.delete(voiceId);
     mutate();
+  }
+
+  async function handleSampleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const voiceId = sampleTargetVoiceId;
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    setSampleTargetVoiceId(null);
+
+    if (!voiceId || !file) return;
+
+    const form = new FormData();
+    form.append("file", file);
+    form.append("note", "additional sample");
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api.voices.addSample(voiceId, form);
+      mutate();
+      setSuccess("Additional sample saved.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not save additional sample.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -175,6 +202,15 @@ export default function VoicesContent() {
         </form>
       </section>
 
+      <input
+        ref={sampleInputRef}
+        type="file"
+        accept="audio/*,.flac,.wav,.mp3,.ogg,.webm,.m4a"
+        className="hidden"
+        aria-hidden="true"
+        onChange={handleSampleFileChange}
+      />
+
       <section>
         <h2 className="section-title text-sm font-semibold mb-3">Your voices</h2>
         {!voices ? (
@@ -190,11 +226,24 @@ export default function VoicesContent() {
                   <p className="hint text-xs mt-0.5">
                     {voice.duration_s.toFixed(1)}s · {new Date(voice.created_at).toLocaleDateString()}
                   </p>
+                  <p className="hint text-xs mt-0.5">
+                    {voice.sample_count ?? 1} samples · {voice.total_duration_s?.toFixed(1) ?? voice.duration_s.toFixed(1)}s total
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="badge text-xs px-2 py-0.5 rounded-full font-medium">
                     {voice.engine}
                   </span>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs px-2 py-1.5 rounded-lg"
+                    onClick={() => {
+                      setSampleTargetVoiceId(voice.voice_id);
+                      sampleInputRef.current?.click();
+                    }}
+                  >
+                    Add sample
+                  </button>
                   {pendingDeleteId === voice.voice_id ? (
                     <span className="flex items-center gap-1">
                       <span className="hint text-xs">Delete?</span>

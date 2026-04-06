@@ -10,22 +10,37 @@ function resolveApiBase(): string {
   return "http://127.0.0.1:8000";
 }
 
+export type VoiceSample = {
+  sample_id: string;
+  kind: string;
+  duration_s: number;
+  note?: string | null;
+  filename: string;
+  created_at: string;
+};
+
 export type VoiceProfile = {
   voice_id: string;
   name: string;
   duration_s: number;
   created_at: string;
   engine: string;
+  sample_count?: number;
+  total_duration_s?: number;
+  samples?: VoiceSample[];
 };
 
 export type Job = {
   job_id: string;
   voice_id: string;
-  status: "queued" | "processing" | "completed" | "failed";
+  status: "queued" | "processing" | "completed" | "failed" | "cancelled";
   progress_pct: number;
   output_id: string | null;
   error: string | null;
   created_at: string;
+  chunk_size?: number;
+  crossfade_ms?: number;
+  effects_preset?: string | null;
 };
 
 export type Output = {
@@ -35,6 +50,12 @@ export type Output = {
   script: string;
   duration_s: number;
   created_at: string;
+  chunk_size?: number;
+  crossfade_ms?: number;
+  effects_preset?: string | null;
+  generation_id?: string | null;
+  take_number?: number;
+  lineage_job_id?: string | null;
 };
 
 export type HealthResponse = {
@@ -70,6 +91,8 @@ export const api = {
     list: () => req<VoiceProfile[]>("/api/v1/voices"),
     create: (form: FormData) =>
       req<VoiceProfile>("/api/v1/voices", { method: "POST", body: form }),
+    addSample: (voiceId: string, form: FormData) =>
+      req<VoiceSample>(`/api/v1/voices/${voiceId}/samples`, { method: "POST", body: form }),
     delete: (voiceId: string) =>
       fetch(`${resolveApiBase()}/api/v1/voices/${voiceId}`, { method: "DELETE" }),
   },
@@ -79,6 +102,9 @@ export const api = {
     script: string;
     speed: number;
     pause_ms: number;
+    chunk_size?: number;
+    crossfade_ms?: number;
+    effects_preset?: string | null;
   }) =>
     req<{ job_id: string; status: string }>("/api/v1/synthesize", {
       method: "POST",
@@ -93,6 +119,7 @@ export const api = {
 
   outputs: {
     list: () => req<Output[]>("/api/v1/outputs"),
+    takes: (generationId: string) => req<Output[]>(`/api/v1/outputs/takes/${generationId}`),
     downloadUrl: (outputId: string, format: "wav" | "mp3") =>
       `${resolveApiBase()}/api/v1/outputs/${outputId}/download?format=${format}`,
     delete: (outputId: string) =>

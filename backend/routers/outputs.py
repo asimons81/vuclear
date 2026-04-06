@@ -21,11 +21,23 @@ class OutputResponse(BaseModel):
     script: str
     duration_s: float
     created_at: str
+    chunk_size: int = 800
+    crossfade_ms: int = 120
+    effects_preset: Optional[str] = None
+    generation_id: Optional[str] = None
+    take_number: int = 1
+    lineage_job_id: Optional[str] = None
 
 
 @router.get("", response_model=list[OutputResponse])
 async def list_outputs():
     outputs = output_service.list_outputs()
+    return [OutputResponse(**o) for o in outputs]
+
+
+@router.get("/takes/{generation_id}", response_model=list[OutputResponse])
+async def list_output_takes(generation_id: str):
+    outputs = output_service.list_output_takes(generation_id)
     return [OutputResponse(**o) for o in outputs]
 
 

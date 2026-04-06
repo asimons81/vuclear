@@ -58,6 +58,7 @@ export default function HistoryContent() {
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]">Date</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]">Script</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] whitespace-nowrap">Duration</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em] whitespace-nowrap">Take</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.14em]">Download</th>
                   <th className="px-4 py-3" aria-label="Actions" />
                 </tr>
@@ -73,6 +74,9 @@ export default function HistoryContent() {
                     </td>
                     <td className="px-4 py-3 hint whitespace-nowrap font-mono text-xs">
                       {fmtDuration(output.duration_s)}
+                    </td>
+                    <td className="px-4 py-3 hint whitespace-nowrap font-mono text-xs">
+                      Take {output.take_number ?? 1}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1.5">

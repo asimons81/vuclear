@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.config import settings
 from backend.services import voice_service
@@ -22,12 +22,24 @@ logger = logging.getLogger(__name__)
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
+class VoiceSampleResponse(BaseModel):
+    sample_id: str
+    kind: str
+    duration_s: float
+    note: str | None = None
+    filename: str
+    created_at: str
+
+
 class VoiceProfileResponse(BaseModel):
     voice_id: str
     name: str
     duration_s: float
     created_at: str
     engine: str
+    sample_count: int = 1
+    total_duration_s: float = 0.0
+    samples: list[VoiceSampleResponse] = Field(default_factory=list)
 
 
 @router.post("", response_model=VoiceProfileResponse, status_code=status.HTTP_201_CREATED)
@@ -165,6 +177,54 @@ async def create_voice(
 async def list_voices():
     profiles = voice_service.list_voice_profiles()
     return [VoiceProfileResponse(**p) for p in profiles]
+
+
+@router.post("/{voice_id}/samples", response_model=VoiceSampleResponse, status_code=status.HTTP_201_CREATED)
+async def add_voice_sample(
+    voice_id: str,
+    file: Annotated[UploadFile, File(description="Additional reference audio")],
+    note: Annotated[str | None, Form(default=None, max_length=160)] = None,
+):
+    profile = voice_service.get_voice_profile(voice_id)
+    if not profile:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voice not found")
+
+    tmp_path: Path | None = None
+    sample_dir: Path | None = None
+
+    try:
+        content = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="File too large. Maximum 50MB.",
+            )
+
+        with tempfile.NamedTemporaryFile(
+            suffix=Path(file.filename or "sample.wav").suffix, delete=False
+        ) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+
+        detected_mime, duration_s = validate_audio_file(tmp_path)
+        if detected_mime not in {"audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/flac", "audio/webm", "video/webm", "audio/mp4", "audio/x-m4a", "video/mp4"}:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Unsupported file type: {detected_mime}")
+
+        sample = voice_service.add_voice_sample(
+            voice_id,
+            duration_s=duration_s,
+            kind="additional",
+            note=note,
+            source_path=tmp_path,
+        )
+        return VoiceSampleResponse(**sample)
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    finally:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
 
 
 @router.delete("/{voice_id}", status_code=status.HTTP_204_NO_CONTENT)

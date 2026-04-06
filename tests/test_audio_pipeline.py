@@ -32,10 +32,10 @@ class TestSplitScript:
         # Create text that definitely needs splitting
         sentence = "A" * 180 + "."
         text = f"{sentence} {sentence}"
-        chunks = split_script(text, chunk_size=CHUNK_MAX_CHARS)
+        chunks = split_script(text, chunk_size=200)
         assert len(chunks) >= 2
         for c in chunks:
-            assert len(c) <= CHUNK_MAX_CHARS + 50  # small buffer for word boundaries
+            assert len(c) <= 250  # small buffer for word boundaries
 
     def test_no_empty_chunks(self):
         text = "  Hello.   World.   Goodbye.  "

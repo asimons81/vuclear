@@ -1,6 +1,6 @@
 "use client";
 
-const MAX_CHARS = 2000;
+const MAX_CHARS = 50000;
 
 type Props = {
   value: string;

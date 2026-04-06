@@ -20,6 +20,11 @@ class JobResponse(BaseModel):
     output_id: Optional[str]
     error: Optional[str]
     created_at: str
+    chunk_size: int = 800
+    crossfade_ms: int = 120
+    effects_preset: Optional[str] = None
+    attempt: int = 1
+    retry_of: Optional[str] = None
 
 
 @router.get("/{job_id}", response_model=JobResponse)

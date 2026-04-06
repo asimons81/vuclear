@@ -8,6 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
+from time import monotonic, sleep
 from typing import Optional
 
 from backend.config import settings
@@ -17,7 +18,8 @@ logger = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="inference")
 _jobs: dict[str, dict] = {}  # in-memory cache
 
-VALID_STATUSES = {"queued", "processing", "completed", "failed"}
+VALID_STATUSES = {"queued", "processing", "completed", "failed", "cancelled"}
+TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 
 def _now_iso() -> str:
@@ -51,7 +53,18 @@ def _load_jobs_from_disk() -> None:
             logger.warning("Failed to load job file %s: %s", path, e)
 
 
-def create_job(voice_id: str, script: str, speed: float, pause_ms: int) -> dict:
+def create_job(
+    voice_id: str,
+    script: str,
+    speed: float,
+    pause_ms: int,
+    chunk_size: int = 800,
+    crossfade_ms: int = 120,
+    effects_preset: str | None = None,
+    *,
+    attempt: int = 1,
+    retry_of: str | None = None,
+) -> dict:
     job_id = str(uuid.uuid4())
     job = {
         "job_id": job_id,
@@ -59,6 +72,12 @@ def create_job(voice_id: str, script: str, speed: float, pause_ms: int) -> dict:
         "script": script,
         "speed": speed,
         "pause_ms": pause_ms,
+        "chunk_size": chunk_size,
+        "crossfade_ms": crossfade_ms,
+        "effects_preset": effects_preset,
+        "attempt": attempt,
+        "retry_of": retry_of,
+        "cancel_requested": False,
         "status": "queued",
         "progress_pct": 0,
         "output_id": None,
@@ -98,9 +117,52 @@ def update_job(job_id: str, **kwargs) -> dict:
 
 def submit_job(job_id: str) -> None:
     """Submit job to thread pool for async execution."""
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(_executor, _run_job, job_id)
+    _executor.submit(_run_job, job_id)
+
+
+def wait_for_job(job_id: str, timeout_s: float = 300.0, poll_interval_s: float = 0.1) -> dict:
+    deadline = monotonic() + timeout_s
+    while True:
+        job = get_job(job_id)
+        if not job:
+            raise KeyError(f"Job not found: {job_id}")
+        if job.get("status") in TERMINAL_STATUSES:
+            return job
+        if monotonic() >= deadline:
+            raise TimeoutError(f"Timed out waiting for job {job_id}")
+        sleep(poll_interval_s)
+
+
+def create_retry_job(job_id: str) -> dict:
+    original = get_job(job_id)
+    if not original:
+        raise KeyError(f"Job not found: {job_id}")
+
+    return create_job(
+        voice_id=original["voice_id"],
+        script=original["script"],
+        speed=original["speed"],
+        pause_ms=original["pause_ms"],
+        chunk_size=int(original.get("chunk_size", 800)),
+        crossfade_ms=int(original.get("crossfade_ms", 120)),
+        effects_preset=original.get("effects_preset"),
+        attempt=int(original.get("attempt", 1)) + 1,
+        retry_of=original.get("retry_of") or original["job_id"],
+    )
+
+
+def cancel_job(job_id: str) -> dict:
+    job = get_job(job_id)
+    if not job:
+        raise KeyError(f"Job not found: {job_id}")
+    if job.get("status") in TERMINAL_STATUSES:
+        return job
+
+    job["cancel_requested"] = True
+    job["status"] = "cancelled"
+    job["updated_at"] = _now_iso()
+    _save_job(job)
+    return job
 
 
 def _run_job(job_id: str) -> None:
@@ -108,6 +170,11 @@ def _run_job(job_id: str) -> None:
     job = get_job(job_id)
     if not job:
         logger.error("Job not found for execution: %s", job_id)
+        return
+
+    if job.get("cancel_requested") or job.get("status") == "cancelled":
+        logger.info("Skipping cancelled job: %s", job_id)
+        update_job(job_id, status="cancelled")
         return
 
     update_job(job_id, status="processing", progress_pct=5)
@@ -133,8 +200,17 @@ def _run_job(job_id: str) -> None:
             output_dir=output_dir,
             speed=job["speed"],
             pause_ms=job["pause_ms"],
+            effects_preset=job.get("effects_preset"),
+            chunk_size=int(job.get("chunk_size", 800)),
+            crossfade_ms=int(job.get("crossfade_ms", 120)),
             progress_cb=progress_cb,
         )
+
+        job = get_job(job_id)
+        if not job or job.get("cancel_requested") or job.get("status") == "cancelled":
+            logger.info("Job cancelled after synthesis; skipping output persistence: %s", job_id)
+            update_job(job_id, status="cancelled")
+            return
 
         create_output(
             output_id=output_id,
@@ -144,6 +220,12 @@ def _run_job(job_id: str) -> None:
             speed=job["speed"],
             pause_ms=job["pause_ms"],
             duration_s=duration_s,
+            chunk_size=int(job.get("chunk_size", 800)),
+            crossfade_ms=int(job.get("crossfade_ms", 120)),
+            effects_preset=job.get("effects_preset"),
+            generation_id=job.get("retry_of") or job_id,
+            take_number=int(job.get("attempt", 1)),
+            lineage_job_id=job.get("retry_of") or job_id,
         )
 
         update_job(

@@ -15,6 +15,9 @@ export default function StudioContent() {
   const [script, setScript] = useState("");
   const [speed, setSpeed] = useState(1.0);
   const [pauseMs, setPauseMs] = useState(300);
+  const [chunkSize, setChunkSize] = useState(800);
+  const [crossfadeMs, setCrossfadeMs] = useState(120);
+  const [effectsPreset, setEffectsPreset] = useState("dry");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [completedJob, setCompletedJob] = useState<Job | null>(null);
@@ -43,6 +46,9 @@ export default function StudioContent() {
         script: script.trim(),
         speed,
         pause_ms: pauseMs,
+        chunk_size: chunkSize,
+        crossfade_ms: crossfadeMs,
+        effects_preset: effectsPreset === "dry" ? null : effectsPreset,
       });
       setJobId(res.job_id);
     } catch (e: unknown) {
@@ -130,7 +136,7 @@ export default function StudioContent() {
           {showAdvanced && (
             <div
               id="advanced-settings-panel"
-              className="mt-3 grid grid-cols-1 gap-6 border-t pt-4 sm:grid-cols-2"
+              className="mt-3 grid grid-cols-1 gap-6 border-t pt-4 sm:grid-cols-4"
             >
               <div>
                 <label htmlFor="speed-slider" className="label block text-sm font-medium mb-1.5">
@@ -177,6 +183,73 @@ export default function StudioContent() {
                   <span>1s</span>
                 </div>
               </div>
+
+              <div>
+                <label htmlFor="chunk-size-slider" className="label block text-sm font-medium mb-1.5">
+                  Chunk size <span className="hint font-mono">{chunkSize} chars</span>
+                </label>
+                <input
+                  id="chunk-size-slider"
+                  type="range"
+                  min={100}
+                  max={5000}
+                  step={100}
+                  value={chunkSize}
+                  onChange={(e) => setChunkSize(Number.parseInt(e.target.value, 10))}
+                  className="w-full"
+                  aria-label="Chunk size in characters"
+                  aria-valuetext={`${chunkSize} characters`}
+                />
+                <div className="hint mt-1 flex justify-between text-xs">
+                  <span>100</span>
+                  <span>800</span>
+                  <span>5k</span>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="crossfade-slider" className="label block text-sm font-medium mb-1.5">
+                  Crossfade <span className="hint font-mono">{crossfadeMs}ms</span>
+                </label>
+                <input
+                  id="crossfade-slider"
+                  type="range"
+                  min={0}
+                  max={200}
+                  step={10}
+                  value={crossfadeMs}
+                  onChange={(e) => setCrossfadeMs(Number.parseInt(e.target.value, 10))}
+                  className="w-full"
+                  aria-label="Crossfade duration in milliseconds"
+                  aria-valuetext={`${crossfadeMs} milliseconds`}
+                />
+                <div className="hint mt-1 flex justify-between text-xs">
+                  <span>0ms</span>
+                  <span>120ms</span>
+                  <span>200ms</span>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="effects-select" className="label block text-sm font-medium mb-1.5">
+                  Effects preset
+                </label>
+                <select
+                  id="effects-select"
+                  value={effectsPreset}
+                  onChange={(e) => setEffectsPreset(e.target.value)}
+                  className="select-field rounded-xl px-3 py-2 text-sm"
+                >
+                  <option value="dry">Dry</option>
+                  <option value="warm">Warm</option>
+                  <option value="broadcast">Broadcast</option>
+                  <option value="telephone">Telephone</option>
+                  <option value="cinematic">Cinematic</option>
+                </select>
+                <p className="hint mt-1 text-xs">
+                  Shapes the final voice tone before export.
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -218,6 +291,13 @@ export default function StudioContent() {
         <div role="alert" className="banner-error rounded-xl p-4">
           <p className="text-sm font-medium mb-0.5">Generation failed</p>
           <p className="text-sm">{completedJob.error}</p>
+        </div>
+      )}
+
+      {completedJob && completedJob.status === "cancelled" && (
+        <div role="status" className="panel rounded-xl p-4">
+          <p className="text-sm font-medium mb-0.5">Generation cancelled</p>
+          <p className="text-sm">The job was cancelled before completion.</p>
         </div>
       )}
     </div>
